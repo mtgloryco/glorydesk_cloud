@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="GloryDesk.Cloud.Tests/GloryDesk.Cloud.Tests.csproj" />
+  <Project Path="GloryDesk.Cloud/GloryDesk.Cloud.csproj" />
+</Solution>

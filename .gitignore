@@ -1,0 +1,23 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Local database and storage
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+backups/
+
+# OS files
+.DS_Store
+Thumbs.db

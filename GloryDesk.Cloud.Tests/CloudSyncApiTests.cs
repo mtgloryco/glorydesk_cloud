@@ -1,11 +1,11 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using InventoryManagementSystem.Cloud.Models;
+using GloryDesk.Cloud.Models;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-namespace InventoryManagementSystem.Tests;
+namespace GloryDesk.Cloud.Tests;
 
 public class CloudSyncApiTests : IClassFixture<WebApplicationFactory<Program>>
 {

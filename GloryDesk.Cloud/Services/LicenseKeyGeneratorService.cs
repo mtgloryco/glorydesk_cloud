@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
-using InventoryManagementSystem.Cloud.Models;
+using GloryDesk.Cloud.Models;
 
-namespace InventoryManagementSystem.Cloud.Services;
+namespace GloryDesk.Cloud.Services;
 
 public class LicenseKeyGeneratorService
 {

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Mail;
 
-namespace InventoryManagementSystem.Cloud.Services;
+namespace GloryDesk.Cloud.Services;
 
 public class EmailNotificationService
 {

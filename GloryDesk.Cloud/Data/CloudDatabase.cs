@@ -1,8 +1,8 @@
-using InventoryManagementSystem.Cloud.Models;
+using GloryDesk.Cloud.Models;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 
-namespace InventoryManagementSystem.Cloud.Data;
+namespace GloryDesk.Cloud.Data;
 
 public enum CloudDatabaseProvider
 {

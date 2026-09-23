@@ -1,7 +1,7 @@
 using System.Text;
-using InventoryManagementSystem.Cloud.Data;
-using InventoryManagementSystem.Cloud.Models;
-using InventoryManagementSystem.Cloud.Services;
+using GloryDesk.Cloud.Data;
+using GloryDesk.Cloud.Models;
+using GloryDesk.Cloud.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;

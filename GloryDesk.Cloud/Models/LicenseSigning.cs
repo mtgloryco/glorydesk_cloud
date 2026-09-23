@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-namespace InventoryManagementSystem.Cloud.Models;
+namespace GloryDesk.Cloud.Models;
 
 public class LicensePayload
 {

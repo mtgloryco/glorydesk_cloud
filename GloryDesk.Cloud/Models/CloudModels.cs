@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace InventoryManagementSystem.Cloud.Models;
+namespace GloryDesk.Cloud.Models;
 
 public record RegisterRequest(string Email, string Password, string OrganizationName);
 public record LoginRequest(string Email, string Password);

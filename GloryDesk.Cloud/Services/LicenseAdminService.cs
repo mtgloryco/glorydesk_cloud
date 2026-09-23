@@ -1,9 +1,9 @@
-using InventoryManagementSystem.Cloud.Data;
-using InventoryManagementSystem.Cloud.Models;
+using GloryDesk.Cloud.Data;
+using GloryDesk.Cloud.Models;
 using Microsoft.Data.Sqlite;
 using Npgsql;
 
-namespace InventoryManagementSystem.Cloud.Services;
+namespace GloryDesk.Cloud.Services;
 
 public class LicenseAdminService
 {

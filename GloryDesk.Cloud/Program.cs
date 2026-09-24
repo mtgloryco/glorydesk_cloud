@@ -19,6 +19,13 @@ builder.Services.AddScoped<LicenseSeatService>();
 builder.Services.AddSingleton<EmailNotificationService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is required.");
+var configuredIssuer = builder.Configuration["Jwt:Issuer"] ?? "glorydesk-web";
+var configuredAudience = builder.Configuration["Jwt:Audience"] ?? "glorydesk-clients";
+var validIssuers = new[] { configuredIssuer, "glorydesk-web", "glorydesk", "ims-cloud" }
+    .Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToArray();
+var validAudiences = new[] { configuredAudience, "glorydesk-clients", "ims-clients" }
+    .Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToArray();
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -29,8 +36,8 @@ builder.Services
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuers = validIssuers,
+            ValidAudiences = validAudiences,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });

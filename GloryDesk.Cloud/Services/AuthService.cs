@@ -182,8 +182,8 @@ public class AuthService
     private string CreateToken(Guid userId, Guid organizationId, string email)
     {
         var key = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key is required.");
-        var issuer = _configuration["Jwt:Issuer"] ?? "ims-cloud";
-        var audience = _configuration["Jwt:Audience"] ?? "ims-clients";
+        var issuer = _configuration["Jwt:Issuer"] ?? "glorydesk-web";
+        var audience = _configuration["Jwt:Audience"] ?? "glorydesk-clients";
 
         var claims = new[]
         {

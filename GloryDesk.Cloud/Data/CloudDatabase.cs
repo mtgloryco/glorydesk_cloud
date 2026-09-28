@@ -81,7 +81,8 @@ public class CloudDatabase
             var user = Uri.UnescapeDataString(userInfo[0]);
             var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
             var database = uri.AbsolutePath.TrimStart('/');
-            return $"Host={uri.Host};Port={(uri.Port > 0 ? uri.Port : 5432)};Database={database};Username={user};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+            var sslMode = url.Contains("sslmode=disable", StringComparison.OrdinalIgnoreCase) ? "Disable" : "Prefer";
+            return $"Host={uri.Host};Port={(uri.Port > 0 ? uri.Port : 5432)};Database={database};Username={user};Password={password};SSL Mode={sslMode};Trust Server Certificate=true";
         }
 
         return url;

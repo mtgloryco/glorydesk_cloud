@@ -1,0 +1,115 @@
+name: CI / CD Deployment
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # 1. Run all automated unit and integration tests
+  test:
+    name: Run Automated Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore Dependencies
+        run: dotnet restore GloryDesk.Cloud.sln
+
+      - name: Build Solution
+        run: dotnet build GloryDesk.Cloud.sln -c Release --no-restore
+
+      - name: Execute Test Suite
+        run: dotnet test GloryDesk.Cloud.Tests/GloryDesk.Cloud.Tests.csproj -c Release --no-build --verbosity normal
+
+  # 2. Automatically deploy to production server on successful test run
+  deploy:
+    name: Deploy to Server
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Deployment Secrets
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.SERVER_HOST }}" ] || [ -z "${{ secrets.SERVER_SSH_KEY }}" ]; then
+            echo "::warning ::SERVER_HOST or SERVER_SSH_KEY secrets are not configured in repository settings. Deployment skipped."
+            echo "configured=false" >> $GITHUB_OUTPUT
+          else
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy via SSH
+        if: steps.check-secrets.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER || 'ubuntu' }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          timeout: 180s
+          script: |
+            set -e
+            echo "====================================================="
+            echo "  GloryDesk Cloud Automated Server Deployment"
+            echo "====================================================="
+            
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH || '/home/ubuntu/glorydesk-cloud' }}"
+            
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "Cloning repository to $DEPLOY_DIR..."
+              git clone git@github.com:mtgloryco/glorydesk_cloud.git "$DEPLOY_DIR"
+              cd "$DEPLOY_DIR"
+            else
+              echo "Navigating to $DEPLOY_DIR and pulling latest changes..."
+              cd "$DEPLOY_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            # Initialize .env from example if not already created
+            if [ ! -f .env ]; then
+              echo "Creating .env from .env.example..."
+              cp .env.example .env
+            fi
+
+            echo "Rebuilding and starting Docker containers..."
+            docker compose down || true
+            docker compose up -d --build
+
+            echo "Awaiting backend healthcheck..."
+            HEALTHY=false
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8080/health > /dev/null; then
+                echo "GloryDesk Cloud is HEALTHY on attempt $i!"
+                HEALTHY=true
+                break
+              fi
+              echo "Waiting for service to become healthy ($i/30)..."
+              sleep 2
+            done
+
+            if [ "$HEALTHY" = false ]; then
+              echo "ERROR: GloryDesk Cloud health check failed!"
+              docker compose logs --tail=50
+              exit 1
+            fi
+
+            echo "====================================================="
+            echo "Deployment successful! Active containers:"
+            docker compose ps
+            echo ""
+            curl -s http://localhost:8080/health
+            echo ""
+            echo "====================================================="

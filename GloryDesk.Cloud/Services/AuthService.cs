@@ -122,8 +122,7 @@ public class AuthService
                 var pg = (NpgsqlConnection)conn;
                 await using var cmd = new NpgsqlCommand(
                     """
-                    SELECT u.id, u.email, u.password_hash, u.organization_id, o.name,
-                           COALESCE(u.role, 'customer')
+                    SELECT u.id, u.email, u.password_hash, u.organization_id, o.name
                     FROM users u
                     INNER JOIN organizations o ON o.id = u.organization_id
                     WHERE lower(u.email) = lower(@email)
@@ -142,8 +141,6 @@ public class AuthService
                         OrganizationId = reader.GetGuid(3)
                     };
                     orgName = reader.GetString(4);
-                    role = reader.GetString(5);
-                    user.Role = role;
                 }
             }
             else
@@ -182,8 +179,7 @@ public class AuthService
 
         // Platform root admin check (bypass license check for super administrators)
         var adminEmail = _configuration["Admin:Email"] ?? _configuration["Admin:AlertEmail"] ?? "mwimulegashame@gmail.com";
-        bool isSuperAdmin = string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(user.Role, "admin", StringComparison.OrdinalIgnoreCase);
+        bool isSuperAdmin = string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase);
 
         string? licenseKey = null;
         string? licenseTier = null;

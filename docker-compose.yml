@@ -10,7 +10,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - PORT=8080
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_secret}@db:5432/${POSTGRES_DB:-glorydesk_cloud}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_secret}@db:5432/${POSTGRES_DB:-glorydesk_cloud}}
       - Jwt__Key=${Jwt__Key:-IMS-Cloud-Dev-Secret-Key-Change-In-Production-32chars!}
       - Jwt__Issuer=${Jwt__Issuer:-glorydesk-web}
       - Jwt__Audience=${Jwt__Audience:-glorydesk-clients}

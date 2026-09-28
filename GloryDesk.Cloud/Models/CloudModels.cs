@@ -5,12 +5,21 @@ namespace GloryDesk.Cloud.Models;
 public record RegisterRequest(string Email, string Password, string OrganizationName);
 public record LoginRequest(string Email, string Password);
 
+public record LoginResult(
+    bool Success,
+    AuthResponse? Response = null,
+    string? ErrorMessage = null,
+    bool RequiresLicense = false);
+
 public record AuthResponse(
     string Token,
     string OrganizationId,
     string OrganizationName,
     string UserId,
-    string Email);
+    string Email,
+    string? LicenseKey = null,
+    string? LicenseTier = null,
+    DateTime? LicenseExpiry = null);
 
 public record SyncChangeRecord(
     string EntityType,
@@ -35,6 +44,7 @@ public class CloudUser
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public Guid OrganizationId { get; set; }
+    public string Role { get; set; } = "customer";
     public DateTime CreatedAt { get; set; }
 }
 

@@ -189,7 +189,15 @@ app.MapPost("/api/auth/register", async (RegisterRequest request, AuthService au
 app.MapPost("/api/auth/login", async (LoginRequest request, AuthService auth) =>
 {
     var result = await auth.LoginAsync(request);
-    return result is null ? Results.Unauthorized() : Results.Ok(result);
+    if (!result.Success)
+    {
+        if (result.RequiresLicense)
+        {
+            return Results.Json(new { error = result.ErrorMessage, requiresLicense = true }, statusCode: 403);
+        }
+        return Results.Json(new { error = result.ErrorMessage ?? "Invalid credentials" }, statusCode: 401);
+    }
+    return Results.Ok(result.Response);
 });
 
 app.MapGet("/api/backup/info", async (HttpContext http, BackupService backup) =>

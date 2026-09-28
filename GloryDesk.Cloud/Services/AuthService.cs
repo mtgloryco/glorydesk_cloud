@@ -109,10 +109,11 @@ public class AuthService
         return new AuthResponse(token, orgId.ToString(), orgName, userId.ToString(), request.Email.Trim().ToLowerInvariant());
     }
 
-    public async Task<AuthResponse?> LoginAsync(LoginRequest request)
+    public async Task<LoginResult> LoginAsync(LoginRequest request)
     {
         CloudUser? user = null;
         string orgName = string.Empty;
+        string role = "customer";
 
         await _db.WithConnectionAsync(async conn =>
         {
@@ -121,7 +122,8 @@ public class AuthService
                 var pg = (NpgsqlConnection)conn;
                 await using var cmd = new NpgsqlCommand(
                     """
-                    SELECT u.id, u.email, u.password_hash, u.organization_id, o.name
+                    SELECT u.id, u.email, u.password_hash, u.organization_id, o.name,
+                           COALESCE(u.role, 'customer')
                     FROM users u
                     INNER JOIN organizations o ON o.id = u.organization_id
                     WHERE lower(u.email) = lower(@email)
@@ -140,6 +142,8 @@ public class AuthService
                         OrganizationId = reader.GetGuid(3)
                     };
                     orgName = reader.GetString(4);
+                    role = reader.GetString(5);
+                    user.Role = role;
                 }
             }
             else
@@ -166,17 +170,114 @@ public class AuthService
                         OrganizationId = Guid.Parse(reader.GetString(3))
                     };
                     orgName = reader.GetString(4);
+                    user.Role = role;
                 }
             }
         });
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            return null;
+            return new LoginResult(false, null, "Invalid email or password.", false);
+        }
+
+        // Platform root admin check (bypass license check for super administrators)
+        var adminEmail = _configuration["Admin:Email"] ?? _configuration["Admin:AlertEmail"] ?? "mwimulegashame@gmail.com";
+        bool isSuperAdmin = string.Equals(user.Email, adminEmail, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(user.Role, "admin", StringComparison.OrdinalIgnoreCase);
+
+        string? licenseKey = null;
+        string? licenseTier = null;
+        DateTime? licenseExpiry = null;
+
+        if (!isSuperAdmin)
+        {
+            bool hasValidLicense = false;
+
+            await _db.WithConnectionAsync(async conn =>
+            {
+                if (_db.Provider == CloudDatabaseProvider.Postgres)
+                {
+                    var pg = (NpgsqlConnection)conn;
+                    await using var cmd = new NpgsqlCommand(
+                        """
+                        SELECT lr.license_key, lr.tier, lr.expiry
+                        FROM license_requests lr
+                        WHERE (
+                            lower(lr.email) = lower(@email)
+                            OR lower(lr.email) IN (SELECT lower(u2.email) FROM users u2 WHERE u2.organization_id = @orgId)
+                        )
+                          AND lr.status = 'issued'
+                          AND (lr.expiry IS NULL OR lr.expiry > NOW())
+                        ORDER BY lr.created_at DESC
+                        LIMIT 1
+                        """, pg);
+                    cmd.Parameters.AddWithValue("email", user.Email);
+                    cmd.Parameters.AddWithValue("orgId", user.OrganizationId);
+
+                    await using var reader = await cmd.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        hasValidLicense = true;
+                        licenseKey = reader.IsDBNull(0) ? null : reader.GetString(0);
+                        licenseTier = reader.IsDBNull(1) ? null : reader.GetString(1);
+                        licenseExpiry = reader.IsDBNull(2) ? null : reader.GetDateTime(2);
+                    }
+                }
+                else
+                {
+                    var sqlite = (SqliteConnection)conn;
+                    await using var cmd = sqlite.CreateCommand();
+                    cmd.CommandText = """
+                        SELECT lr.LicenseKey, lr.Tier, lr.Expiry
+                        FROM LicenseRequests lr
+                        WHERE (
+                            lower(lr.Email) = lower($email)
+                            OR lower(lr.Email) IN (SELECT lower(u2.Email) FROM Users u2 WHERE u2.OrganizationId = $orgId)
+                        )
+                          AND lr.Status = 'issued'
+                          AND (lr.Expiry IS NULL OR lr.Expiry > datetime('now'))
+                        ORDER BY lr.CreatedAt DESC
+                        LIMIT 1
+                        """;
+                    cmd.Parameters.AddWithValue("$email", user.Email);
+                    cmd.Parameters.AddWithValue("$orgId", user.OrganizationId.ToString());
+
+                    await using var reader = await cmd.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        hasValidLicense = true;
+                        licenseKey = reader.IsDBNull(0) ? null : reader.GetString(0);
+                        licenseTier = reader.IsDBNull(1) ? null : reader.GetString(1);
+                        if (!reader.IsDBNull(2) && DateTime.TryParse(reader.GetString(2), out var exp))
+                        {
+                            licenseExpiry = exp;
+                        }
+                    }
+                }
+            });
+
+            if (!hasValidLicense)
+            {
+                return new LoginResult(
+                    false,
+                    null,
+                    "No active license found for this account. Please request a trial or purchase a license at https://mtglory.com to activate access.",
+                    true);
+            }
         }
 
         var token = CreateToken(user.Id, user.OrganizationId, user.Email);
-        return new AuthResponse(token, user.OrganizationId.ToString(), orgName, user.Id.ToString(), user.Email);
+        var response = new AuthResponse(
+            token,
+            user.OrganizationId.ToString(),
+            orgName,
+            user.Id.ToString(),
+            user.Email,
+            licenseKey,
+            licenseTier,
+            licenseExpiry);
+
+        return new LoginResult(true, response, null, false);
     }
 
     private string CreateToken(Guid userId, Guid organizationId, string email)

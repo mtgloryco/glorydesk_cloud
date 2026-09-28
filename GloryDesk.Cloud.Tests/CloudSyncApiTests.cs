@@ -81,8 +81,34 @@ public class CloudSyncApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.NotNull(backupInfo);
         Assert.True(backupInfo.Exists);
 
+        // Without a license, customer login is blocked with 403 Forbidden
+        var noLicenseLogin = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, noLicenseLogin.StatusCode);
+
+        // Request and issue a license for this account
+        var req = await client.PostAsJsonAsync("/api/license/request", new LicenseRequestDto(
+            email, "Test Org", "Pro", "HWID-TEST-12345678"));
+        req.EnsureSuccessStatusCode();
+
+        using var adminReq = new HttpRequestMessage(HttpMethod.Get, "/api/admin/license-requests?status=pending");
+        adminReq.Headers.Add("X-Admin-Key", "dev-admin-key-change-in-production");
+        var listRes = await client.SendAsync(adminReq);
+        listRes.EnsureSuccessStatusCode();
+        var pendingList = await listRes.Content.ReadFromJsonAsync<List<LicenseRequestRecord>>();
+        var userPending = pendingList!.First(r => r.Email == email);
+
+        using var issueReq = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/license-requests/{userPending.Id}/issue");
+        issueReq.Headers.Add("X-Admin-Key", "dev-admin-key-change-in-production");
+        issueReq.Content = JsonContent.Create(new AdminIssueRequest(1));
+        var issueRes = await client.SendAsync(issueReq);
+        issueRes.EnsureSuccessStatusCode();
+
+        // Once license is active, login succeeds and delivers license key
         var loginResponse = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
         loginResponse.EnsureSuccessStatusCode();
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(loginResult);
+        Assert.False(string.IsNullOrWhiteSpace(loginResult.LicenseKey));
     }
 
     [Fact]

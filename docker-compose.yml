@@ -26,6 +26,10 @@ services:
       - Smtp__EnableSsl=${Smtp__EnableSsl:-true}
     volumes:
       - backups_data:/app/backups
+    networks:
+      default:
+        aliases:
+          - backend
     depends_on:
       db:
         condition: service_healthy

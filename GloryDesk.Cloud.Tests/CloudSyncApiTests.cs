@@ -171,4 +171,47 @@ public class CloudSyncApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.False(string.IsNullOrWhiteSpace(issue.LicenseKey));
         Assert.Contains('.', issue.LicenseKey);
     }
+
+    [Fact]
+    public async Task Organization_Settings_Get_And_Put_Works()
+    {
+        var client = _factory.CreateClient();
+        var email = $"org-settings-{Guid.NewGuid():N}@example.com";
+        const string password = "Secret123!";
+
+        var registerRes = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, password, "Super Store Ltd"));
+        registerRes.EnsureSuccessStatusCode();
+        var auth = await registerRes.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+
+        // GET should return default/registered settings
+        var getRes = await client.GetAsync("/api/organization/settings");
+        getRes.EnsureSuccessStatusCode();
+        var settings = await getRes.Content.ReadFromJsonAsync<OrganizationSettingsDto>();
+        Assert.NotNull(settings);
+        Assert.Equal("Super Store Ltd", settings.StoreName);
+        Assert.True(settings.SetupCompleted);
+
+        // PUT update settings
+        settings.StoreName = "Super Store Worldwide";
+        settings.CurrencySymbol = "USD";
+        settings.StoreAddress = "New York, USA";
+        settings.BusinessType = "wholesale";
+
+        var putRes = await client.PutAsJsonAsync("/api/organization/settings", settings);
+        putRes.EnsureSuccessStatusCode();
+
+        // GET again and verify
+        var getRes2 = await client.GetAsync("/api/organization/settings");
+        getRes2.EnsureSuccessStatusCode();
+        var updated = await getRes2.Content.ReadFromJsonAsync<OrganizationSettingsDto>();
+        Assert.NotNull(updated);
+        Assert.Equal("Super Store Worldwide", updated.StoreName);
+        Assert.Equal("USD", updated.CurrencySymbol);
+        Assert.Equal("New York, USA", updated.StoreAddress);
+        Assert.Equal("wholesale", updated.BusinessType);
+        Assert.True(updated.SetupCompleted);
+    }
 }

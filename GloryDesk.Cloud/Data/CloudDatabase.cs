@@ -94,7 +94,8 @@ public class CloudDatabase
             CREATE TABLE IF NOT EXISTS Organizations (
                 Id TEXT PRIMARY KEY,
                 Name TEXT NOT NULL,
-                CreatedAt TEXT NOT NULL
+                CreatedAt TEXT NOT NULL,
+                SettingsJson TEXT
             );
 
             CREATE TABLE IF NOT EXISTS Users (
@@ -164,6 +165,28 @@ public class CloudDatabase
         await cmd.ExecuteNonQueryAsync();
 
         await MigrateSqliteLicenseRequestsAsync(conn);
+        await MigrateSqliteOrganizationsAsync(conn);
+    }
+
+    private static async Task MigrateSqliteOrganizationsAsync(SqliteConnection conn)
+    {
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using (var info = conn.CreateCommand())
+        {
+            info.CommandText = "PRAGMA table_info(Organizations)";
+            await using var reader = await info.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                columns.Add(reader.GetString(1));
+            }
+        }
+
+        if (!columns.Contains("SettingsJson"))
+        {
+            await using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE Organizations ADD COLUMN SettingsJson TEXT";
+            await alter.ExecuteNonQueryAsync();
+        }
     }
 
     private static async Task MigrateSqliteLicenseRequestsAsync(SqliteConnection conn)
@@ -198,7 +221,8 @@ public class CloudDatabase
             CREATE TABLE IF NOT EXISTS organizations (
                 id UUID PRIMARY KEY,
                 name TEXT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL
+                created_at TIMESTAMPTZ NOT NULL,
+                settings_json JSONB
             );
 
             CREATE TABLE IF NOT EXISTS users (
@@ -266,6 +290,13 @@ public class CloudDatabase
         await cmd.ExecuteNonQueryAsync();
 
         await MigratePostgresLicenseRequestsAsync(conn);
+        await MigratePostgresOrganizationsAsync(conn);
+    }
+
+    private static async Task MigratePostgresOrganizationsAsync(NpgsqlConnection conn)
+    {
+        await using var cmd = new NpgsqlCommand("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS settings_json JSONB", conn);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static async Task MigratePostgresLicenseRequestsAsync(NpgsqlConnection conn)

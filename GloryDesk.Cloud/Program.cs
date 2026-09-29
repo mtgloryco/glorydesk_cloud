@@ -253,6 +253,124 @@ app.MapGet("/api/sync/pull", async (HttpContext http, SyncService sync, DateTime
     return Results.Ok(response);
 }).RequireAuthorization();
 
+app.MapGet("/api/organization/settings", async (HttpContext http, CloudDatabase db) =>
+{
+    var orgId = CloudClaims.GetOrganizationId(http.User);
+    if (orgId == Guid.Empty) return Results.Unauthorized();
+
+    OrganizationSettingsDto? settings = null;
+    string orgName = string.Empty;
+
+    await db.WithConnectionAsync(async conn =>
+    {
+        if (db.Provider == CloudDatabaseProvider.Postgres)
+        {
+            var pg = (Npgsql.NpgsqlConnection)conn;
+            await using var cmd = new Npgsql.NpgsqlCommand(
+                "SELECT name, settings_json FROM organizations WHERE id = @id LIMIT 1", pg);
+            cmd.Parameters.AddWithValue("id", orgId);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                orgName = reader.GetString(0);
+                if (!reader.IsDBNull(1))
+                {
+                    try
+                    {
+                        var json = reader.GetString(1);
+                        settings = System.Text.Json.JsonSerializer.Deserialize<OrganizationSettingsDto>(json);
+                    }
+                    catch { }
+                }
+            }
+        }
+        else
+        {
+            var sqlite = (Microsoft.Data.Sqlite.SqliteConnection)conn;
+            await using var cmd = sqlite.CreateCommand();
+            cmd.CommandText = "SELECT Name, SettingsJson FROM Organizations WHERE Id = $id LIMIT 1";
+            cmd.Parameters.AddWithValue("$id", orgId.ToString());
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                orgName = reader.GetString(0);
+                if (!reader.IsDBNull(1))
+                {
+                    try
+                    {
+                        var json = reader.GetString(1);
+                        settings = System.Text.Json.JsonSerializer.Deserialize<OrganizationSettingsDto>(json);
+                    }
+                    catch { }
+                }
+            }
+        }
+    });
+
+    if (settings == null)
+    {
+        settings = new OrganizationSettingsDto
+        {
+            StoreName = string.IsNullOrWhiteSpace(orgName) ? "My Store" : orgName,
+            SetupCompleted = true,
+            UpdatedAt = DateTime.UtcNow
+        };
+    }
+    else if (string.IsNullOrWhiteSpace(settings.StoreName) && !string.IsNullOrWhiteSpace(orgName))
+    {
+        settings.StoreName = orgName;
+    }
+
+    return Results.Ok(settings);
+}).RequireAuthorization();
+
+app.MapPut("/api/organization/settings", async (HttpContext http, CloudDatabase db, OrganizationSettingsDto input) =>
+{
+    var orgId = CloudClaims.GetOrganizationId(http.User);
+    if (orgId == Guid.Empty) return Results.Unauthorized();
+
+    input.UpdatedAt = DateTime.UtcNow;
+    input.SetupCompleted = true;
+    var json = System.Text.Json.JsonSerializer.Serialize(input);
+    var storeName = input.StoreName?.Trim();
+
+    await db.WithConnectionAsync(async conn =>
+    {
+        if (db.Provider == CloudDatabaseProvider.Postgres)
+        {
+            var pg = (Npgsql.NpgsqlConnection)conn;
+            await using var cmd = new Npgsql.NpgsqlCommand(
+                """
+                UPDATE organizations
+                SET settings_json = @settings::jsonb,
+                    name = COALESCE(NULLIF(@name, ''), name)
+                WHERE id = @id
+                """, pg);
+            cmd.Parameters.AddWithValue("settings", json);
+            cmd.Parameters.AddWithValue("name", string.IsNullOrWhiteSpace(storeName) ? (object)DBNull.Value : storeName);
+            cmd.Parameters.AddWithValue("id", orgId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        else
+        {
+            var sqlite = (Microsoft.Data.Sqlite.SqliteConnection)conn;
+            await using var cmd = sqlite.CreateCommand();
+            cmd.CommandText = """
+                UPDATE Organizations
+                SET SettingsJson = $settings,
+                    Name = CASE WHEN $name != '' THEN $name ELSE Name END
+                WHERE Id = $id
+                """;
+            cmd.Parameters.AddWithValue("$settings", json);
+            cmd.Parameters.AddWithValue("$name", storeName ?? string.Empty);
+            cmd.Parameters.AddWithValue("$id", orgId.ToString());
+            await cmd.ExecuteNonQueryAsync();
+        }
+    });
+
+    return Results.Ok(new { success = true, updatedAt = input.UpdatedAt });
+}).RequireAuthorization();
+
 app.Run();
 
 public partial class Program;

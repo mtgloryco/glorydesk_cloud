@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using BCrypt.Net;
 using GloryDesk.Cloud.Data;
 using GloryDesk.Cloud.Models;
@@ -35,6 +36,13 @@ public class AuthService
             : request.OrganizationName.Trim();
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         var now = DateTime.UtcNow;
+        var initialSettings = new OrganizationSettingsDto
+        {
+            StoreName = orgName,
+            SetupCompleted = true,
+            UpdatedAt = now
+        };
+        var initialSettingsJson = JsonSerializer.Serialize(initialSettings);
 
         try
         {
@@ -46,12 +54,13 @@ public class AuthService
                     await using var tx = await pg.BeginTransactionAsync();
 
                     await using (var orgCmd = new NpgsqlCommand(
-                        "INSERT INTO organizations (id, name, created_at) VALUES (@id, @name, @created)",
+                        "INSERT INTO organizations (id, name, created_at, settings_json) VALUES (@id, @name, @created, @settings::jsonb)",
                         pg, tx))
                     {
                         orgCmd.Parameters.AddWithValue("id", orgId);
                         orgCmd.Parameters.AddWithValue("name", orgName);
                         orgCmd.Parameters.AddWithValue("created", now);
+                        orgCmd.Parameters.AddWithValue("settings", initialSettingsJson);
                         await orgCmd.ExecuteNonQueryAsync();
                     }
 
@@ -77,10 +86,11 @@ public class AuthService
                     await using (var orgCmd = sqlite.CreateCommand())
                     {
                         orgCmd.Transaction = tx;
-                        orgCmd.CommandText = "INSERT INTO Organizations (Id, Name, CreatedAt) VALUES ($id, $name, $created)";
+                        orgCmd.CommandText = "INSERT INTO Organizations (Id, Name, CreatedAt, SettingsJson) VALUES ($id, $name, $created, $settings)";
                         orgCmd.Parameters.AddWithValue("$id", orgId.ToString());
                         orgCmd.Parameters.AddWithValue("$name", orgName);
                         orgCmd.Parameters.AddWithValue("$created", now.ToString("O"));
+                        orgCmd.Parameters.AddWithValue("$settings", initialSettingsJson);
                         await orgCmd.ExecuteNonQueryAsync();
                     }
 

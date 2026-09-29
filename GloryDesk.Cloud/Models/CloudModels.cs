@@ -38,6 +38,20 @@ public record BackupInfoResponse(bool Exists, DateTime? UploadedAt, long SizeByt
 public record LicenseRequestDto(string Email, string Company, string Tier, string HardwareId);
 public record LicenseRequestResponse(bool Success, string Message);
 
+public class OrganizationSettingsDto
+{
+    public string StoreName { get; set; } = "My Store";
+    public string StoreAddress { get; set; } = "Kigali, Rwanda";
+    public string CurrencySymbol { get; set; } = "RWF";
+    public decimal DefaultTaxRate { get; set; } = 0.18m;
+    public string BusinessType { get; set; } = "retail";
+    public bool SetupCompleted { get; set; } = true;
+    public string CostingMethod { get; set; } = "FIFO";
+    public Dictionary<string, bool> EnabledModules { get; set; } = new();
+    public Dictionary<string, string> TerminologyOverrides { get; set; } = new();
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class CloudUser
 {
     public Guid Id { get; set; }
@@ -53,6 +67,7 @@ public class Organization
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public string? SettingsJson { get; set; }
 }
 
 public class SyncRecord
